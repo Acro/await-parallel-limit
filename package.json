@@ -1,6 +1,6 @@
 {
   "name": "await-parallel-limit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Await an array of async functions with parallel limit.",
   "main": "index.js",
   "scripts": {
@@ -14,5 +14,9 @@
     "limit"
   ],
   "author": "Ondrej Machek, acrocz@gmail.com",
-  "license": "ISC"
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/Acro/await-parallel-limit"
+  }
 }
