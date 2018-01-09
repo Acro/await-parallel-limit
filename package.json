@@ -1,0 +1,18 @@
+{
+  "name": "await-parallel-limit",
+  "version": "1.0.0",
+  "description": "Await an array of async functions with parallel limit.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "async",
+    "await",
+    "array",
+    "parallel",
+    "limit"
+  ],
+  "author": "Ondrej Machek, acrocz@gmail.com",
+  "license": "ISC"
+}
