@@ -15,7 +15,7 @@ parallel(
 )
 ```
 
-## Usage
+## Typescript
 
 ```typescript
 import parallel from 'await-parallel-limit'
@@ -31,6 +31,8 @@ const jobs = [
 // it is an ordered tuple of types
 const results = await parallel(jobs, 2)
 ```
+
+## Javascript
 
 ```javascript
 const parallel = require('await-parallel-limit')
