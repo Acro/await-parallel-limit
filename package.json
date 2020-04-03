@@ -1,6 +1,6 @@
 {
   "name": "await-parallel-limit",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Await an array of async functions with parallel limit.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

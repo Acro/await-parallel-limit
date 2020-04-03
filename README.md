@@ -21,21 +21,21 @@ parallel(
 import parallel from 'await-parallel-limit'
 
 const jobs = [
-	async () { ... },
-	async () { ... },
-	async () { ... },
-	async () { ... }
+	async () { return await true },
+	async () { return await 2 },
 ] as const
 
 // results array is typed based on return types of async functions
 // it is an ordered tuple of types
+
+// const results: [ boolean, number ]
 const results = await parallel(jobs, 2)
 ```
 
 ## Javascript
 
 ```javascript
-const parallel = require('await-parallel-limit')
+const parallel = require('await-parallel-limit').default
 
 var jobs = [
 	async () { ... },
