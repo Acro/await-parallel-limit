@@ -1,11 +1,13 @@
 {
   "name": "await-parallel-limit",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": "Await an array of async functions with parallel limit.",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "prepublish": "tsc",
   "keywords": [
     "async",
     "await",
@@ -18,5 +20,6 @@
   "repository": {
     "type": "git",
     "url": "git://github.com/Acro/await-parallel-limit"
-  }
+  },
+  "dependencies": {}
 }

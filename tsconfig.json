@@ -1,0 +1,27 @@
+{
+    "compilerOptions": {
+      "declaration": true,
+      "inlineSourceMap": true,
+      "inlineSources": true,
+      "emitDecoratorMetadata": true,
+      "experimentalDecorators": true,
+      "module": "commonjs",
+      "moduleResolution": "node",
+      "noImplicitAny": true,
+      "noImplicitReturns": true,
+      "outDir": "dist",
+      "removeComments": false,
+      "rootDir": "src",
+      "strictNullChecks": true,
+      "target": "es6",
+      "baseUrl": "src"
+    },
+    "types": [ "node" ],
+    "include": [
+      "src/**/*"
+    ],
+    "exclude": [
+      "build"
+    ]
+  }
+  
