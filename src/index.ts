@@ -1,11 +1,10 @@
 type Unpacked<T> =
-    T extends (infer U)[] ? U :
     T extends (...args: any[]) => infer U ? U :
     T extends Promise<infer U> ? U :
     T;
 
 const parallel = async <T>(
-  jobs: { [K in keyof T]: (() => Promise<Unpacked<T[K]>>) },
+  jobs: { [K in keyof T]: (() => Promise<T[K]>) },
   limit:number,
 ) => {
   type Data = typeof jobs

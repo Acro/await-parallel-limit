@@ -8,10 +8,16 @@ const do_something = async () => {
     return await new Promise(resolve => setTimeout(resolve, timeout))
 }
 
+const another_async = async () => {
+    return await (async () => {
+        return [true, true]
+    })()
+}
+
 const jobs = [
     do_something,
     async () => {
-        return await true
+        return await another_async()
     },
     async () => {
         return await 2
