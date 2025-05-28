@@ -14,7 +14,8 @@
       "rootDir": "src",
       "strictNullChecks": true,
       "target": "es6",
-      "baseUrl": "src"
+      "baseUrl": "src",
+      "esModuleInterop": true
     },
     "types": [ "node" ],
     "include": [

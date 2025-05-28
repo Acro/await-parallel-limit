@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "ts-node test/test.ts"
   },
   "prepublish": "tsc",
   "keywords": [
@@ -21,5 +21,9 @@
     "type": "git",
     "url": "git://github.com/Acro/await-parallel-limit"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "devDependencies": {
+    "ts-node": "^10.9.1",
+    "typescript": "^4.9.5"
+  }
 }
