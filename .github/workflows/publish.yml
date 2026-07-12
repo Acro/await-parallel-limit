@@ -1,0 +1,63 @@
+name: Publish
+
+# Publishes to npm with provenance attestations. Trigger by publishing a
+# GitHub Release (tag `vX.Y.Z`), or manually via workflow_dispatch.
+#
+# One-time setup: add an npm Automation token as the `NPM_TOKEN` repository
+# secret (Settings → Secrets and variables → Actions). Provenance requires a
+# public repo and the `id-token: write` permission below — npm links the
+# published tarball to this exact workflow run and commit.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # required for npm provenance (OIDC)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: npm install
+
+      - name: Guard — tag matches package.json version
+        if: github.event_name == 'release'
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          TAG="${{ github.event.release.tag_name }}"
+          if [ "v$PKG_VERSION" != "$TAG" ] && [ "$PKG_VERSION" != "$TAG" ]; then
+            echo "::error::package.json is $PKG_VERSION but the release tag is $TAG"
+            exit 1
+          fi
+
+      - name: Full gate — unit suite + type gate
+        run: npm test
+
+      - name: Full gate — differential fuzz
+        run: npm run fuzz -- 500
+
+      - name: Full gate — package-boundary smoke (CJS + ESM) from the tarball
+        run: |
+          npm pack --pack-destination /tmp
+          TARBALL="$(ls /tmp/await-parallel-limit-*.tgz)"
+          mkdir -p /tmp/consumer && cd /tmp/consumer
+          npm init -y > /dev/null
+          npm install "$TARBALL"
+          cp "$GITHUB_WORKSPACE/test/boundary/smoke.cjs" "$GITHUB_WORKSPACE/test/boundary/smoke.mjs" .
+          node --unhandled-rejections=strict smoke.cjs
+          node --unhandled-rejections=strict smoke.mjs
+
+      - name: Publish with provenance
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

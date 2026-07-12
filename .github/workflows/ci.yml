@@ -10,7 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [16.x, 18.x, 20.x, 22.x]
+        # 16.14 is the declared engines floor — tested exactly.
+        node-version: ['16.14', 16.x, 18.x, 20.x, 22.x, 24.x]
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js ${{ matrix.node-version }}
@@ -19,3 +20,46 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: npm install
       - run: npm test
+
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      - run: npm install
+      - name: Differential fuzz (500 seeded scenarios)
+        run: npm run fuzz -- 500
+
+  package-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      - run: npm install
+      - name: Pack tarball
+        run: |
+          npm pack --pack-destination /tmp
+          echo "TARBALL=$(ls /tmp/await-parallel-limit-*.tgz)" >> "$GITHUB_ENV"
+      - name: Install into a fresh consumer and run the smoke tests (CJS + ESM)
+        run: |
+          mkdir -p /tmp/consumer && cd /tmp/consumer
+          npm init -y > /dev/null
+          npm install "$TARBALL"
+          cp "$GITHUB_WORKSPACE/test/boundary/smoke.cjs" "$GITHUB_WORKSPACE/test/boundary/smoke.mjs" .
+          node --unhandled-rejections=strict smoke.cjs
+          node --unhandled-rejections=strict smoke.mjs
+      - name: Typings floor gate — TypeScript 3.4 compiles the installed d.ts
+        run: |
+          cd /tmp/consumer
+          cp "$GITHUB_WORKSPACE/test/boundary/consumer.ts" .
+          npm install --no-save typescript@3.4.5
+          ./node_modules/.bin/tsc --noEmit --strict --target es2017 --lib es2017 --moduleResolution node consumer.ts
+      - name: Typings gate — latest TypeScript compiles the installed d.ts
+        run: |
+          cd /tmp/consumer
+          npm install --no-save typescript@latest
+          ./node_modules/.bin/tsc --noEmit --strict --target es2017 --lib es2017 --moduleResolution node consumer.ts
