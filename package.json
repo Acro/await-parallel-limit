@@ -1,25 +1,44 @@
 {
   "name": "await-parallel-limit",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Await an array of async functions with parallel limit.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "prepare": "tsc",
+    "test": "tsc && node test/index.test.cjs"
   },
-  "prepublish": "tsc",
   "keywords": [
     "async",
     "await",
     "array",
     "parallel",
-    "limit"
+    "concurrency",
+    "limit",
+    "promise",
+    "pool"
   ],
   "author": "Ondrej Machek, acrocz@gmail.com",
-  "license": "ISC",
+  "license": "MIT",
+  "engines": {
+    "node": ">=12"
+  },
   "repository": {
     "type": "git",
-    "url": "git://github.com/Acro/await-parallel-limit"
+    "url": "git+https://github.com/Acro/await-parallel-limit.git"
   },
-  "dependencies": {}
+  "bugs": {
+    "url": "https://github.com/Acro/await-parallel-limit/issues"
+  },
+  "homepage": "https://github.com/Acro/await-parallel-limit#readme",
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
 }
