@@ -24,6 +24,6 @@ Surface: the package boundary. Pack → install into a throwaway consumer → dr
 
 ## Gotchas
 
-- Bare Node ESM: `import parallel from 'await-parallel-limit'` yields the exports **object** (Node ignores `__esModule`); use named imports or `.default`. Bundlers/tsc are fine.
+- Node ESM default import works via the `exports` map + `esm/index.mjs` wrapper. If `import parallel from` ever yields an object instead of a function, the exports map or wrapper broke — run `test/boundary/smoke.mjs` against the packed tarball.
 - `tsc ... | head` masks the exit code — check `$?` on the tsc command itself, not the pipe.
 - Scale check: 100k-item `map` should be O(10ms); if it regresses to O(100ms), per-item thunk allocation crept back in.

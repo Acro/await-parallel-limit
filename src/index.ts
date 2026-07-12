@@ -158,9 +158,13 @@ const callThunk = (job: () => Promise<any>) => job()
  * {@link settle} to collect every outcome instead of failing fast.
  *
  * @param jobs    Array of functions, each returning a promise.
- * @param limit   Max jobs to run concurrently. Values that are not positive
- *                integers fall back to {@link DEFAULT_CONCURRENCY} (5).
+ * @param limit   Max jobs to run concurrently (`Infinity` = unbounded). Values
+ *                that are not positive integers fall back to
+ *                {@link DEFAULT_CONCURRENCY} (5).
  * @param options Optional `{ signal }` to cancel the run early.
+ * @example
+ * const jobs = [async () => 1, async () => 'a'] as const
+ * const [n, s] = await parallel(jobs, 2) // n: number, s: string
  */
 const parallel = <T>(
   jobs: { [K in keyof T]: () => Promise<T[K]> },
@@ -174,6 +178,10 @@ const parallel = <T>(
  * an array of per-job outcomes (`{ status: 'fulfilled', value }` or
  * `{ status: 'rejected', reason }`) in input order — the concurrency-limited
  * equivalent of `Promise.allSettled`.
+ *
+ * @example
+ * const outcomes = await settle(jobs, 5)
+ * const failed = outcomes.filter((o) => o.status === 'rejected')
  */
 const settle = <T>(
   jobs: { [K in keyof T]: () => Promise<T[K]> },
@@ -193,6 +201,8 @@ const settle = <T>(
  * @param mapper  `(item, index) => value | Promise<value>`.
  * @param limit   Max concurrent calls (default {@link DEFAULT_CONCURRENCY}).
  * @param options Optional `{ signal }` to cancel the run early.
+ * @example
+ * const bodies = await map(urls, (url) => fetch(url).then((r) => r.text()), 10)
  */
 const map = <I, R>(
   items: readonly I[],
@@ -206,6 +216,10 @@ const map = <I, R>(
  * Like {@link map}, but never rejects because of a failing mapper call. Resolves
  * to an array of per-item outcomes in input order — the concurrency-limited
  * equivalent of `Promise.allSettled` over a mapped array.
+ *
+ * @example
+ * const outcomes = await mapSettled(urls, (url) => fetch(url), 10)
+ * const failedUrls = urls.filter((_, i) => outcomes[i].status === 'rejected')
  */
 const mapSettled = <I, R>(
   items: readonly I[],

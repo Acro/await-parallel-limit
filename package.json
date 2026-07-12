@@ -1,11 +1,26 @@
 {
   "name": "await-parallel-limit",
   "version": "3.0.0",
-  "description": "Await an array of async functions with parallel limit.",
+  "description": "Run async functions with a concurrency limit. Zero-dependency promise pool with ordered results, settle-all mode, a map helper, and AbortSignal cancellation. TypeScript tuple inference included.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./esm/index.d.mts",
+        "default": "./esm/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
-    "dist"
+    "dist",
+    "esm",
+    "llms.txt"
   ],
   "sideEffects": false,
   "scripts": {
@@ -21,9 +36,23 @@
     "array",
     "parallel",
     "concurrency",
+    "concurrency-limit",
     "limit",
     "promise",
-    "pool"
+    "promise-pool",
+    "pool",
+    "p-limit",
+    "p-map",
+    "allsettled",
+    "settle",
+    "batch",
+    "rate-limit",
+    "throttle",
+    "abort",
+    "abortsignal",
+    "cancel",
+    "typescript",
+    "zero-dependency"
   ],
   "author": "Ondrej Machek, acrocz@gmail.com",
   "license": "MIT",

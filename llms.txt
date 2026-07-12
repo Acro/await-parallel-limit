@@ -1,0 +1,77 @@
+# await-parallel-limit
+
+> Zero-dependency promise pool: run async functions with a concurrency limit.
+> Ordered results, settle-all mode, map helper, AbortSignal cancellation.
+> CJS + ESM. Node >= 16.14. TypeScript >= 3.4 (typings), tuple inference for
+> `as const` job arrays.
+
+## Install
+
+npm install await-parallel-limit
+
+## Import (both work everywhere; ESM default import is safe)
+
+CJS:  const parallel = require('await-parallel-limit').default
+      const { parallel, settle, map, mapSettled, DEFAULT_CONCURRENCY } = require('await-parallel-limit')
+ESM:  import parallel, { settle, map, mapSettled, DEFAULT_CONCURRENCY } from 'await-parallel-limit'
+
+## API (all four share the same limit + options semantics)
+
+parallel<T>(jobs: Array<() => Promise<T>>, limit?: number, options?: { signal?: AbortSignal }): Promise<T[]>
+  Run zero-arg async functions. Fail-fast (first rejection rejects the promise,
+  like Promise.all). Results in INPUT order. With `as const` tuple jobs, the
+  result type is an ordered tuple. Also the default export.
+
+settle<T>(jobs, limit?, options?): Promise<SettledResult<T>[]>
+  Like parallel but never rejects because of a failing job. Each slot is
+  { status: 'fulfilled', value } or { status: 'rejected', reason }
+  (concurrency-limited Promise.allSettled). Still rejects on abort.
+
+map<I, R>(items: I[], mapper: (item: I, index: number) => R | Promise<R>, limit?, options?): Promise<R[]>
+  Map data through an async (or sync) mapper with bounded concurrency.
+  Fail-fast, input order. Sparse holes reach the mapper as undefined.
+
+mapSettled<I, R>(items, mapper, limit?, options?): Promise<SettledResult<R>[]>
+  Settle-all variant of map.
+
+DEFAULT_CONCURRENCY = 5
+
+## Semantics (guaranteed, fuzz-tested)
+
+- At most `limit` tasks in flight; a finished task is replaced immediately
+  (sliding pool, not batches). Infinity = unbounded.
+- limit that is not a positive integer or Infinity (0, -1, 2.5, NaN, undefined)
+  falls back to 5. Non-array input rejects with "First argument is not an array."
+- Fail-fast: after the first rejection NO further tasks start; in-flight tasks
+  finish but results are discarded. Need every task to run? Use settle/mapSettled.
+- Abort: pre-aborted signal rejects before anything starts; abort mid-run (even
+  synchronously from inside a task) rejects with signal.reason and stops
+  scheduling. Listener always removed — safe to reuse one signal across runs.
+- After the returned promise settles, a late task rejection is absorbed (never
+  an unhandled rejection).
+- Input array length is snapshotted at call time; mutating it mid-run does not
+  change the result set.
+
+## Recipes
+
+// Rate-limited fetches, tolerate failures, know which failed:
+const outcomes = await mapSettled(urls, (u) => fetch(u), 10)
+const failed = urls.filter((_, i) => outcomes[i].status === 'rejected')
+
+// Typed tuple from heterogeneous jobs:
+const jobs = [async () => 1, async () => 'a'] as const
+const [n, s] = await parallel(jobs, 2)   // n: number, s: string
+
+// Cancellation with timeout:
+const c = new AbortController()
+const t = setTimeout(() => c.abort(new Error('timeout')), 5000)
+try { return await map(items, work, 8, { signal: c.signal }) }
+finally { clearTimeout(t) }
+
+## Gotchas
+
+- parallel/settle take THUNKS (() => Promise), not promises. An array of
+  already-created promises is already running — wrap creation in functions,
+  or use map(items, mapper) and let the library call you.
+- settle/mapSettled reject ONLY on abort or non-array input, never on job errors.
+- Jobs cannot be force-cancelled mid-await; abort stops SCHEDULING.

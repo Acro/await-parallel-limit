@@ -84,9 +84,16 @@ setTimeout(() => controller.abort(), 5000)
 await parallel(jobs, 5, { signal: controller.signal })
 ```
 
-## JavaScript (CommonJS)
+## Importing
+
+Both module systems are first-class (an `exports` map routes each to the right
+entry — the ESM default import is the function, not a namespace object):
 
 ```javascript
+// ESM
+import parallel, { settle, map, mapSettled } from 'await-parallel-limit'
+
+// CommonJS
 const parallel = require('await-parallel-limit').default
 const { settle, map, mapSettled } = require('await-parallel-limit')
 
@@ -95,6 +102,14 @@ const results = await parallel([
   async () => { /* ... */ },
 ], 2)
 ```
+
+## For AI agents
+
+The npm tarball ships an [`llms.txt`](./llms.txt) — the complete API,
+semantics, recipes, and gotchas in one compact file
+(`node_modules/await-parallel-limit/llms.txt`). Contributors: see
+[`AGENTS.md`](./AGENTS.md) for build/test/fuzz commands and the invariants
+this package guarantees.
 
 ## Compatibility
 

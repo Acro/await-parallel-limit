@@ -44,13 +44,14 @@ jobs:
         run: |
           npm pack --pack-destination /tmp
           echo "TARBALL=$(ls /tmp/await-parallel-limit-*.tgz)" >> "$GITHUB_ENV"
-      - name: Install into a fresh consumer and run the smoke test
+      - name: Install into a fresh consumer and run the smoke tests (CJS + ESM)
         run: |
           mkdir -p /tmp/consumer && cd /tmp/consumer
           npm init -y > /dev/null
           npm install "$TARBALL"
-          cp "$GITHUB_WORKSPACE/test/boundary/smoke.cjs" .
+          cp "$GITHUB_WORKSPACE/test/boundary/smoke.cjs" "$GITHUB_WORKSPACE/test/boundary/smoke.mjs" .
           node --unhandled-rejections=strict smoke.cjs
+          node --unhandled-rejections=strict smoke.mjs
       - name: Typings floor gate — TypeScript 3.4 compiles the installed d.ts
         run: |
           cd /tmp/consumer
