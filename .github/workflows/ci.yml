@@ -59,7 +59,9 @@ jobs:
           npm install --no-save typescript@3.4.5
           ./node_modules/.bin/tsc --noEmit --strict --target es2017 --lib es2017 --moduleResolution node consumer.ts
       - name: Typings gate — latest TypeScript compiles the installed d.ts
+        # node16 resolution (not the removed-in-TS7 `node`/node10) — this also
+        # exercises the exports map's `import`/`require` type conditions.
         run: |
           cd /tmp/consumer
           npm install --no-save typescript@latest
-          ./node_modules/.bin/tsc --noEmit --strict --target es2017 --lib es2017 --moduleResolution node consumer.ts
+          ./node_modules/.bin/tsc --noEmit --strict --target es2017 --lib es2017 --module node16 --moduleResolution node16 consumer.ts
