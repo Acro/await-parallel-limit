@@ -15,8 +15,9 @@ type MapToSettled<T> = { [K in keyof T]: SettledResult<Unpacked<Unpacked<T[K]>>>
 
 /** Minimal structural shape of an `AbortSignal`. Declared locally so consumers
  *  don't need the DOM lib; a real `AbortController().signal` satisfies it.
- *  `reason` is `any` (not `unknown`) to keep the published typings compilable
- *  on pre-3.0 TypeScript. */
+ *  `reason` is `any` (not `unknown`) so this interface adds no TypeScript-version
+ *  constraint of its own; the package's effective typings floor is TS 3.4, set by
+ *  the `readonly` array syntax in the `map`/`mapSettled` signatures. */
 export interface AbortSignalLike {
   readonly aborted: boolean
   readonly reason?: any

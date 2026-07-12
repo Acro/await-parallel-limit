@@ -95,7 +95,8 @@ remaining job in the background even though the batch promise had already
 rejected and the results were discarded. If you relied on those background side
 effects, use `settle`, which always runs every job.
 
-Requires Node >= 16.14.
+Requires Node >= 16.14. TypeScript consumers need TS >= 3.4 (the published
+typings use `readonly` array syntax).
 
 ## License
 
