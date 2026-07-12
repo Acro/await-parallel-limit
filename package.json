@@ -27,7 +27,7 @@
   "author": "Ondrej Machek, acrocz@gmail.com",
   "license": "MIT",
   "engines": {
-    "node": ">=12"
+    "node": ">=16.14"
   },
   "repository": {
     "type": "git",

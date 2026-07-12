@@ -85,9 +85,17 @@ const results = await parallel([
 
 ## Compatibility
 
-`3.x` is a superset of `2.x`: the default export and the `parallel(jobs, limit)`
-call shape are unchanged. `settle`, `map`, `mapSettled`, and the `options`
-argument are additive. Upgrading from `2.x` requires no code changes.
+`3.x` keeps the `2.x` API: the default export and the `parallel(jobs, limit)`
+call shape are unchanged, and `settle`, `map`, `mapSettled`, and the `options`
+argument are additive.
+
+One deliberate behavioural change: after a fail-fast rejection, `3.x` stops
+starting the remaining jobs. In `2.x`, surviving workers kept executing every
+remaining job in the background even though the batch promise had already
+rejected and the results were discarded. If you relied on those background side
+effects, use `settle`, which always runs every job.
+
+Requires Node >= 16.14.
 
 ## License
 

@@ -14,10 +14,12 @@ export type SettledResult<T> =
 type MapToSettled<T> = { [K in keyof T]: SettledResult<Unpacked<Unpacked<T[K]>>> }
 
 /** Minimal structural shape of an `AbortSignal`. Declared locally so consumers
- *  don't need the DOM lib; a real `AbortController().signal` satisfies it. */
+ *  don't need the DOM lib; a real `AbortController().signal` satisfies it.
+ *  `reason` is `any` (not `unknown`) to keep the published typings compilable
+ *  on pre-3.0 TypeScript. */
 export interface AbortSignalLike {
   readonly aborted: boolean
-  readonly reason?: unknown
+  readonly reason?: any
   addEventListener(type: 'abort', listener: () => void, options?: { once?: boolean }): void
   removeEventListener(type: 'abort', listener: () => void): void
 }
@@ -34,8 +36,6 @@ export interface ParallelOptions {
 
 export const DEFAULT_CONCURRENCY = 5
 
-type Job<T> = () => Promise<T>
-
 const normalizeLimit = (limit: number | undefined): number =>
   typeof limit === 'number' && Number.isInteger(limit) && limit > 0 ? limit : DEFAULT_CONCURRENCY
 
@@ -49,17 +49,23 @@ const abortReason = (signal: AbortSignalLike): unknown => {
 /**
  * Shared worker-pool core for all four public variants. Spawns up to
  * `concurrency` long-lived workers that pull from a shared cursor, so a worker
- * that finishes a job immediately picks up the next unclaimed one (sustained
- * concurrency, not batching). Results are written back at each job's index, so
+ * that finishes an item immediately picks up the next unclaimed one (sustained
+ * concurrency, not batching). Results are written back at each item's index, so
  * ordering matches the input regardless of completion order.
+ *
+ * Workers call `invoke(items[i], i)` directly instead of materialising a thunk
+ * per element: `parallel`/`settle` pass the jobs array with a call-the-thunk
+ * invoker, `map`/`mapSettled` pass the user's items with the mapper itself.
+ * This avoids a closure + an extra promise per item on large inputs.
  */
 const run = async (
-  jobs: Array<Job<any>>,
+  items: readonly any[],
+  invoke: (item: any, index: number) => any,
   limit: number | undefined,
   settle: boolean,
   signal: AbortSignalLike | undefined,
 ): Promise<any[]> => {
-  if (!Array.isArray(jobs)) {
+  if (!Array.isArray(items)) {
     throw new Error('First argument is not an array.')
   }
   if (signal && signal.aborted) {
@@ -67,28 +73,28 @@ const run = async (
   }
 
   const concurrency = normalizeLimit(limit)
-  const results: any[] = new Array(jobs.length)
+  const results: any[] = new Array(items.length)
   let index = 0
-  // Set on the first rejection in fail-fast mode so the surviving workers stop
-  // pulling new jobs — the caller has already been handed the rejection.
+  // Single stop mechanism: set on the first fail-fast rejection and by the
+  // abort listener, so once the returned promise settles early, workers stop
+  // pulling new items. Items already in flight run to completion but their
+  // results are discarded by the caller.
   let stopped = false
 
   const worker = async (): Promise<void> => {
     while (true) {
-      // Stop pulling new work once aborted or failed; jobs already in flight
-      // run to completion but their results are discarded by the caller.
-      if (stopped || (signal && signal.aborted)) return
+      if (stopped) return
       const i = index++
-      if (i >= jobs.length) return
+      if (i >= items.length) return
       if (settle) {
         try {
-          results[i] = { status: 'fulfilled', value: await jobs[i]() }
+          results[i] = { status: 'fulfilled', value: await invoke(items[i], i) }
         } catch (reason) {
           results[i] = { status: 'rejected', reason }
         }
       } else {
         try {
-          results[i] = await jobs[i]()
+          results[i] = await invoke(items[i], i)
         } catch (err) {
           stopped = true
           throw err
@@ -97,12 +103,11 @@ const run = async (
     }
   }
 
-  const workerCount = Math.min(concurrency, jobs.length)
+  const workerCount = Math.min(concurrency, items.length)
   const workers: Promise<void>[] = []
   for (let w = 0; w < workerCount; w++) {
     workers.push(worker())
   }
-
   const all = Promise.all(workers)
 
   if (!signal) {
@@ -110,24 +115,28 @@ const run = async (
     return results
   }
 
-  // Reject promptly when the signal fires, without waiting for in-flight jobs.
-  let onAbort!: () => void
-  const aborted = new Promise<never>((_, reject) => {
-    onAbort = () => reject(abortReason(signal))
-    signal.addEventListener('abort', onAbort, { once: true })
-  })
-  // Swallow a late rejection from a straggler that settles after we've aborted,
-  // so it doesn't surface as an unhandled rejection. `all` still propagates a
-  // job failure to the race below when no abort occurred.
-  all.catch(() => {})
-
+  let onAbort: (() => void) | undefined
   try {
-    await Promise.race([all, aborted])
-    return results
+    return await new Promise<any[]>((resolve, reject) => {
+      onAbort = () => {
+        stopped = true
+        reject(abortReason(signal))
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+      // A job can abort the signal synchronously while the workers are still
+      // starting up — before the listener above exists. Real signals do not
+      // fire 'abort' for listeners added after the fact, so re-check by hand.
+      if (signal.aborted) onAbort()
+      // `reject` here also absorbs a straggler's rejection arriving after an
+      // abort has settled this promise, so it never becomes unhandled.
+      all.then(() => resolve(results), reject)
+    })
   } finally {
-    signal.removeEventListener('abort', onAbort)
+    if (onAbort) signal.removeEventListener('abort', onAbort)
   }
 }
+
+const callThunk = (job: () => Promise<any>) => job()
 
 /**
  * Run an array of async, zero-argument job functions with a bounded number of
@@ -152,7 +161,7 @@ const parallel = <T>(
   limit?: number,
   options?: ParallelOptions,
 ): Promise<MapToResult<typeof jobs>> =>
-  run(jobs as Array<Job<any>>, limit, false, options && options.signal) as Promise<MapToResult<typeof jobs>>
+  run(jobs as readonly any[], callThunk, limit, false, options && options.signal) as Promise<MapToResult<typeof jobs>>
 
 /**
  * Like {@link parallel}, but never rejects because of a failing job. Resolves to
@@ -165,49 +174,40 @@ const settle = <T>(
   limit?: number,
   options?: ParallelOptions,
 ): Promise<MapToSettled<typeof jobs>> =>
-  run(jobs as Array<Job<any>>, limit, true, options && options.signal) as Promise<MapToSettled<typeof jobs>>
+  run(jobs as readonly any[], callThunk, limit, true, options && options.signal) as Promise<MapToSettled<typeof jobs>>
 
 /**
  * Map over `items` with a concurrency limit, calling `mapper(item, index)` for
  * each and resolving to the results in input order. The convenience form of
  * {@link parallel} when you have data plus a transform rather than pre-built
- * thunks. Fails fast on the first rejection.
+ * thunks. Fails fast on the first rejection. Sparse-array holes are passed to
+ * the mapper as `undefined` (matching `Promise.all`).
  *
  * @param items   Array of inputs.
  * @param mapper  `(item, index) => value | Promise<value>`.
  * @param limit   Max concurrent calls (default {@link DEFAULT_CONCURRENCY}).
  * @param options Optional `{ signal }` to cancel the run early.
  */
-const map = async <I, R>(
+const map = <I, R>(
   items: readonly I[],
   mapper: (item: I, index: number) => R | Promise<R>,
   limit?: number,
   options?: ParallelOptions,
-): Promise<R[]> => {
-  if (!Array.isArray(items)) {
-    throw new Error('First argument is not an array.')
-  }
-  const jobs = items.map((item, i) => async () => mapper(item, i))
-  return run(jobs, limit, false, options && options.signal) as Promise<R[]>
-}
+): Promise<R[]> =>
+  run(items, mapper, limit, false, options && options.signal) as Promise<R[]>
 
 /**
  * Like {@link map}, but never rejects because of a failing mapper call. Resolves
  * to an array of per-item outcomes in input order — the concurrency-limited
  * equivalent of `Promise.allSettled` over a mapped array.
  */
-const mapSettled = async <I, R>(
+const mapSettled = <I, R>(
   items: readonly I[],
   mapper: (item: I, index: number) => R | Promise<R>,
   limit?: number,
   options?: ParallelOptions,
-): Promise<SettledResult<R>[]> => {
-  if (!Array.isArray(items)) {
-    throw new Error('First argument is not an array.')
-  }
-  const jobs = items.map((item, i) => async () => mapper(item, i))
-  return run(jobs, limit, true, options && options.signal) as Promise<SettledResult<R>[]>
-}
+): Promise<SettledResult<R>[]> =>
+  run(items, mapper, limit, true, options && options.signal) as Promise<SettledResult<R>[]>
 
 export default parallel
 export { parallel, settle, map, mapSettled }

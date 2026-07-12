@@ -243,7 +243,37 @@ test('settle resolves to an empty array for empty input', async () => {
   assert.deepStrictEqual(await settle([], 3), [])
 })
 
+test('map and mapSettled treat sparse-array holes as undefined items', async () => {
+  const results = await map([1, , 3], async (n, i) => (n === undefined ? `hole@${i}` : n * 2), 2)
+  assert.deepStrictEqual(results, [2, 'hole@1', 6])
+  const settled = await mapSettled([1, , 3], async (n) => (n === undefined ? 'hole' : n * 10), 2)
+  assert.deepStrictEqual(settled.map((r) => r.status), ['fulfilled', 'fulfilled', 'fulfilled'])
+  assert.strictEqual(settled[1].value, 'hole')
+})
+
 // --- v3: AbortSignal --------------------------------------------------------
+
+/**
+ * Minimal AbortSignalLike stub: no `reason` support unless abort() is given
+ * one, and add/remove listener counters so tests can pin cleanup behaviour.
+ */
+const makeStubSignal = () => {
+  const listeners = new Set()
+  const signal = {
+    aborted: false,
+    reason: undefined,
+    adds: 0,
+    removes: 0,
+    addEventListener(type, fn) { signal.adds++; listeners.add(fn) },
+    removeEventListener(type, fn) { signal.removes++; listeners.delete(fn) },
+    abort(reason) {
+      signal.aborted = true
+      signal.reason = reason
+      for (const fn of Array.from(listeners)) fn()
+    },
+  }
+  return signal
+}
 
 test('rejects immediately when passed an already-aborted signal', async () => {
   const controller = new AbortController()
@@ -269,13 +299,50 @@ test('aborting mid-flight rejects and stops scheduling new jobs', async () => {
   assert.ok(started < 20, 'should not have scheduled all jobs')
 })
 
-test('abort uses a default AbortError when no reason is given', async () => {
+test('native abort() without a reason rejects with the platform AbortError', async () => {
   const controller = new AbortController()
   const { jobs } = makeTrackedJobs(6, () => delay(15))
   const p = parallel(jobs, 2, { signal: controller.signal })
   await delay(5)
   controller.abort()
   await assert.rejects(() => p, (err) => err && err.name === 'AbortError')
+})
+
+test('falls back to a library AbortError for minimal signals without reason', async () => {
+  const signal = makeStubSignal()
+  const jobs = Array.from({ length: 6 }, () => () => delay(15))
+  const p = parallel(jobs, 2, { signal })
+  await delay(5)
+  signal.abort() // stub keeps reason === undefined → library fallback path
+  await assert.rejects(
+    () => p,
+    (err) => err instanceof Error && err.name === 'AbortError' && /aborted/.test(err.message),
+  )
+})
+
+test('rejects when a job aborts the signal synchronously during startup', async () => {
+  const controller = new AbortController()
+  const jobs = [
+    () => { controller.abort(new Error('sync abort')); return delay(10).then(() => 'a') },
+    async () => 'b',
+    async () => 'c',
+  ]
+  await assert.rejects(() => parallel(jobs, 2, { signal: controller.signal }), /sync abort/)
+})
+
+test('removes its abort listener after completion and after abort', async () => {
+  const completed = makeStubSignal()
+  await parallel([async () => 1, async () => 2], 2, { signal: completed })
+  assert.strictEqual(completed.adds, 1)
+  assert.strictEqual(completed.removes, 1)
+
+  const aborted = makeStubSignal()
+  const p = parallel(Array.from({ length: 5 }, () => () => delay(15)), 2, { signal: aborted })
+  await delay(5)
+  aborted.abort(new Error('x'))
+  await assert.rejects(() => p, /x/)
+  assert.strictEqual(aborted.adds, 1)
+  assert.strictEqual(aborted.removes, 1)
 })
 
 test('settle also honours abort (cancellation is not a per-job outcome)', async () => {
@@ -295,7 +362,7 @@ test('map honours abort', async () => {
   await assert.rejects(() => p, /map cancelled/)
 })
 
-test('a non-aborted signal does not leak or interfere', async () => {
+test('a non-aborted signal does not interfere with a normal run', async () => {
   const controller = new AbortController()
   const { jobs, state } = makeTrackedJobs(8)
   const results = await parallel(jobs, 4, { signal: controller.signal })
