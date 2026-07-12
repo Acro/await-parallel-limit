@@ -7,20 +7,33 @@ Zero dependencies, first-class TypeScript types.
 npm install await-parallel-limit --save
 ```
 
-## Behaviour
+## Guarantees
 
-- Runs at most `concurrency` tasks at a time (default `5`).
-- Sustained concurrency: when a task finishes, the next one starts immediately —
-  a sliding worker pool, not fixed batches.
-- Results are returned in **input order**, not completion order.
-- `parallel` / `map` fail fast: on the first rejection the returned promise
-  rejects with that error (like `Promise.all`); no further tasks are started,
-  and in-flight tasks run to completion but their results are discarded. Use
-  `settle` / `mapSettled` to collect every outcome instead (like
-  `Promise.allSettled`).
-- A `concurrency` that is not a positive integer (e.g. `0`, `-1`, `2.5`) falls
-  back to the default of `5`.
-- Optional `AbortSignal` cancels a run early.
+- **Concurrency ceiling:** at most `concurrency` tasks are in flight at any
+  moment (default `5`; `Infinity` means unbounded). A `concurrency` that is not
+  a positive integer or `Infinity` (e.g. `0`, `-1`, `2.5`, `NaN`) falls back to
+  the default of `5`.
+- **Sustained concurrency:** when a task finishes, the next one starts
+  immediately — a sliding worker pool, not fixed batches.
+- **Ordering:** results are returned in **input order**, not completion order.
+- **Fail-fast** (`parallel` / `map`): on the first rejection the returned
+  promise rejects with that error (like `Promise.all`); no further tasks are
+  started, and in-flight tasks run to completion but their results are
+  discarded. Use `settle` / `mapSettled` to collect every outcome instead
+  (like `Promise.allSettled`).
+- **Abort** (`{ signal }`): an already-aborted signal rejects before any task
+  starts; aborting mid-run — even synchronously from inside a task — rejects
+  with the signal's `reason` and stops scheduling. The abort listener is always
+  removed, so one long-lived signal can be reused across many runs.
+- **No stray rejections:** after the returned promise settles, a still-running
+  task that later rejects is absorbed — it never surfaces as an unhandled
+  rejection.
+- **Input snapshot:** the input array's length is captured at call time, so
+  mutating the array mid-run cannot change the result set. Elements are read
+  lazily at dispatch; don't mutate the input during a run.
+
+These guarantees are enforced by the unit suite plus a seeded differential
+fuzzer (`npm run fuzz`) and a package-boundary smoke test in CI.
 
 ## API
 

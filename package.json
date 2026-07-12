@@ -12,7 +12,8 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "prepare": "tsc",
-    "test": "tsc && node test/index.test.cjs"
+    "test": "tsc && tsc --noEmit --strict --target es2017 --lib es2017 --moduleResolution node test/types.test.ts && node --unhandled-rejections=strict test/index.test.cjs",
+    "fuzz": "tsc && node --unhandled-rejections=strict test/fuzz.cjs"
   },
   "keywords": [
     "async",

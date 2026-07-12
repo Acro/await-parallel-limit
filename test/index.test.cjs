@@ -114,6 +114,22 @@ test('treats non-positive / non-integer limits as the default', async () => {
   }
 })
 
+test('limit Infinity means unbounded (2.x behaviour), not the default', async () => {
+  const { jobs, state } = makeTrackedJobs(12)
+  await parallel(jobs, Infinity)
+  assert.strictEqual(state.peak, 12, 'all jobs should run at once')
+})
+
+test('mutating the input array mid-run does not change the result set', async () => {
+  const jobs = [
+    async () => { jobs.push(async () => 'sneaked-in'); return 1 },
+    async () => 2,
+    async () => 3,
+  ]
+  const results = await parallel(jobs, 2)
+  assert.deepStrictEqual(results, [1, 2, 3], 'appended job must not run or appear')
+})
+
 test('does not start more workers than there are jobs', async () => {
   const { jobs, state } = makeTrackedJobs(2)
   await parallel(jobs, 100)

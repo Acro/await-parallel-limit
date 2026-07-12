@@ -37,7 +37,9 @@ export interface ParallelOptions {
 
 export const DEFAULT_CONCURRENCY = 5
 
+// `Infinity` means "no limit" (run everything at once) — 2.x behaviour.
 const normalizeLimit = (limit: number | undefined): number =>
+  limit === Infinity ? Infinity :
   typeof limit === 'number' && Number.isInteger(limit) && limit > 0 ? limit : DEFAULT_CONCURRENCY
 
 const abortReason = (signal: AbortSignalLike): unknown => {
@@ -74,7 +76,10 @@ const run = async (
   }
 
   const concurrency = normalizeLimit(limit)
-  const results: any[] = new Array(items.length)
+  // Snapshot the length so mutating `items` mid-run cannot silently shrink or
+  // grow the result set; elements themselves are still read lazily at dispatch.
+  const total = items.length
+  const results: any[] = new Array(total)
   let index = 0
   // Single stop mechanism: set on the first fail-fast rejection and by the
   // abort listener, so once the returned promise settles early, workers stop
@@ -86,7 +91,7 @@ const run = async (
     while (true) {
       if (stopped) return
       const i = index++
-      if (i >= items.length) return
+      if (i >= total) return
       if (settle) {
         try {
           results[i] = { status: 'fulfilled', value: await invoke(items[i], i) }
@@ -104,7 +109,7 @@ const run = async (
     }
   }
 
-  const workerCount = Math.min(concurrency, items.length)
+  const workerCount = Math.min(concurrency, total)
   const workers: Promise<void>[] = []
   for (let w = 0; w < workerCount; w++) {
     workers.push(worker())
