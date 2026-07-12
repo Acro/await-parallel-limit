@@ -58,6 +58,13 @@ jobs:
           node --unhandled-rejections=strict smoke.mjs
 
       - name: Publish with provenance
-        run: npm publish --provenance --access public
+        # npm >= 11.5 is required for OIDC trusted publishing (the "connect a
+        # GitHub repo" flow on npmjs.com); Node 22 ships npm 10.x. With a
+        # trusted publisher configured, no token is needed — OIDC takes
+        # precedence. A classic NPM_TOKEN secret keeps working as a fallback.
+        run: |
+          npm install -g npm@latest
+          npm --version
+          npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
