@@ -14,9 +14,10 @@ npm install await-parallel-limit --save
   a sliding worker pool, not fixed batches.
 - Results are returned in **input order**, not completion order.
 - `parallel` / `map` fail fast: on the first rejection the returned promise
-  rejects with that error (like `Promise.all`); in-flight tasks run to
-  completion but their results are discarded. Use `settle` / `mapSettled` to
-  collect every outcome instead (like `Promise.allSettled`).
+  rejects with that error (like `Promise.all`); no further tasks are started,
+  and in-flight tasks run to completion but their results are discarded. Use
+  `settle` / `mapSettled` to collect every outcome instead (like
+  `Promise.allSettled`).
 - A `concurrency` that is not a positive integer (e.g. `0`, `-1`, `2.5`) falls
   back to the default of `5`.
 - Optional `AbortSignal` cancels a run early.

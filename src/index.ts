@@ -69,11 +69,15 @@ const run = async (
   const concurrency = normalizeLimit(limit)
   const results: any[] = new Array(jobs.length)
   let index = 0
+  // Set on the first rejection in fail-fast mode so the surviving workers stop
+  // pulling new jobs — the caller has already been handed the rejection.
+  let stopped = false
 
   const worker = async (): Promise<void> => {
     while (true) {
-      // Stop pulling new work once aborted; the outer race rejects the caller.
-      if (signal && signal.aborted) return
+      // Stop pulling new work once aborted or failed; jobs already in flight
+      // run to completion but their results are discarded by the caller.
+      if (stopped || (signal && signal.aborted)) return
       const i = index++
       if (i >= jobs.length) return
       if (settle) {
@@ -83,7 +87,12 @@ const run = async (
           results[i] = { status: 'rejected', reason }
         }
       } else {
-        results[i] = await jobs[i]()
+        try {
+          results[i] = await jobs[i]()
+        } catch (err) {
+          stopped = true
+          throw err
+        }
       }
     }
   }
@@ -129,9 +138,9 @@ const run = async (
  * ordered tuple matching each job's resolved value.
  *
  * If any job rejects, the returned promise rejects with the first such error
- * (matching `Promise.all` semantics); jobs already in flight still run to
- * completion but their results are discarded. Use {@link settle} to collect
- * every outcome instead of failing fast.
+ * (matching `Promise.all` semantics); no further jobs are started, and jobs
+ * already in flight run to completion but their results are discarded. Use
+ * {@link settle} to collect every outcome instead of failing fast.
  *
  * @param jobs    Array of functions, each returning a promise.
  * @param limit   Max jobs to run concurrently. Values that are not positive
@@ -169,7 +178,7 @@ const settle = <T>(
  * @param limit   Max concurrent calls (default {@link DEFAULT_CONCURRENCY}).
  * @param options Optional `{ signal }` to cancel the run early.
  */
-const map = <I, R>(
+const map = async <I, R>(
   items: readonly I[],
   mapper: (item: I, index: number) => R | Promise<R>,
   limit?: number,
@@ -187,7 +196,7 @@ const map = <I, R>(
  * to an array of per-item outcomes in input order — the concurrency-limited
  * equivalent of `Promise.allSettled` over a mapped array.
  */
-const mapSettled = <I, R>(
+const mapSettled = async <I, R>(
   items: readonly I[],
   mapper: (item: I, index: number) => R | Promise<R>,
   limit?: number,

@@ -211,6 +211,38 @@ test('mapSettled collects per-item outcomes without rejecting', async () => {
   assert.strictEqual(results[2].value, 30)
 })
 
+test('map and mapSettled reject (not throw synchronously) on non-array input', async () => {
+  for (const fn of [map, mapSettled]) {
+    let threwSync = false
+    let p
+    try {
+      p = fn({}, (x) => x, 2)
+    } catch {
+      threwSync = true
+    }
+    assert.strictEqual(threwSync, false, `${fn.name} must not throw synchronously`)
+    await assert.rejects(p, /First argument is not an array/)
+  }
+})
+
+test('stops starting new jobs after a fail-fast rejection', async () => {
+  let started = 0
+  const jobs = Array.from({ length: 10 }, (_, i) => async () => {
+    started++
+    if (i === 1) { await delay(5); throw new Error('boom') }
+    await delay(15)
+  })
+  await assert.rejects(() => parallel(jobs, 2), /boom/)
+  const startedAtRejection = started
+  await delay(80) // long enough for stragglers to have started more if they were going to
+  assert.strictEqual(started, startedAtRejection, 'no new jobs may start after rejection')
+  assert.ok(started < 10, 'the remaining jobs should have been abandoned')
+})
+
+test('settle resolves to an empty array for empty input', async () => {
+  assert.deepStrictEqual(await settle([], 3), [])
+})
+
 // --- v3: AbortSignal --------------------------------------------------------
 
 test('rejects immediately when passed an already-aborted signal', async () => {
@@ -253,6 +285,14 @@ test('settle also honours abort (cancellation is not a per-job outcome)', async 
   await delay(5)
   controller.abort(new Error('stop'))
   await assert.rejects(() => p, /stop/)
+})
+
+test('map honours abort', async () => {
+  const controller = new AbortController()
+  const p = map(Array.from({ length: 10 }, (_, i) => i), () => delay(20), 3, { signal: controller.signal })
+  await delay(5)
+  controller.abort(new Error('map cancelled'))
+  await assert.rejects(() => p, /map cancelled/)
 })
 
 test('a non-aborted signal does not leak or interfere', async () => {
