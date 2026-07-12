@@ -49,6 +49,57 @@ test('never exceeds the requested concurrency limit', async () => {
   assert.deepStrictEqual(results, Array.from({ length: 20 }, (_, i) => i))
 })
 
+test('sustains max concurrency: replaces a finished job immediately, no batching', async () => {
+  // Deferred promises let us control exactly when each job resolves, so this
+  // test is fully deterministic (no reliance on real-timer timing).
+  const makeDeferred = () => {
+    let resolve
+    const promise = new Promise((r) => { resolve = r })
+    return { promise, resolve }
+  }
+  // Yield a macrotask so all pending worker continuations (microtasks) run.
+  const flush = () => new Promise((r) => setTimeout(r, 0))
+
+  const deferreds = Array.from({ length: 4 }, makeDeferred)
+  const started = []
+  let active = 0
+  let peak = 0
+  const jobs = deferreds.map((d, i) => async () => {
+    active++
+    peak = Math.max(peak, active)
+    started.push(i)
+    await d.promise
+    active--
+    return i
+  })
+
+  const done = parallel(jobs, 2)
+  await flush()
+  // Only the first two jobs start; the pool is full.
+  assert.deepStrictEqual(started, [0, 1])
+  assert.strictEqual(active, 2)
+
+  // Finish ONLY job 0. Job 1 is still running. A true sliding pool must start
+  // job 2 right away; a batching impl would wait for job 1 to finish too.
+  deferreds[0].resolve()
+  await flush()
+  assert.deepStrictEqual(started, [0, 1, 2], 'job 2 should start the instant job 0 frees a slot')
+  assert.strictEqual(active, 2, 'concurrency stays pinned at the limit')
+
+  // Finish job 1 -> job 3 slots in immediately.
+  deferreds[1].resolve()
+  await flush()
+  assert.deepStrictEqual(started, [0, 1, 2, 3])
+  assert.strictEqual(active, 2)
+
+  // Drain the tail.
+  deferreds[2].resolve()
+  deferreds[3].resolve()
+  const results = await done
+  assert.deepStrictEqual(results, [0, 1, 2, 3])
+  assert.strictEqual(peak, 2, 'never exceeded the limit')
+})
+
 test('defaults to a concurrency of 5 when the limit is omitted', async () => {
   const { jobs, state } = makeTrackedJobs(12)
   await parallel(jobs)
